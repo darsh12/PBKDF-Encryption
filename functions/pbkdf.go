@@ -10,7 +10,6 @@ import (
 	"golang.org/x/crypto/pbkdf2"
 	"hash"
 	"io"
-	"os"
 )
 
 func Pbkdf(password []byte, salt []byte, iter int, keyLen int, hashType func() hash.Hash) (masterKey []byte, encryptionKey []byte, hmacKey []byte) {
@@ -35,7 +34,6 @@ func Encryption(plainText []byte, encryptionKey []byte, hmacKey []byte, hashType
 
 	if err != nil {
 		err = errors.New("error generation encryption block")
-		os.Exit(1)
 	}
 
 	//Create a random iv and attach it at the start of the cipherText
@@ -48,7 +46,6 @@ func Encryption(plainText []byte, encryptionKey []byte, hmacKey []byte, hashType
 	//Use the readfull func to copy exact bytes to the buffer
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
 		err = errors.New("error generation a random IV")
-		os.Exit(1)
 	}
 	//Use the cbc mode, and start appending the encrypted text at the end of cipherText
 	mode := cipher.NewCBCEncrypter(block, iv)
@@ -85,8 +82,7 @@ func Decryption(cipherText string, encryptionKey []byte, hmacKey []byte, hashTyp
 
 	//If the hmac are not equal throw an error
 	if !hmacEqual {
-		//err:=errors.New("HMAC could not be verified")
-		os.Exit(1)
+		err = errors.New("HMAC could not be verified")
 	}
 
 	//Create a block
@@ -94,13 +90,12 @@ func Decryption(cipherText string, encryptionKey []byte, hmacKey []byte, hashTyp
 
 	if err != nil {
 		err = errors.New("error generating decryption block")
-		os.Exit(1)
 	}
 
 	//Check if the cipher text is less than the block size
 	if len(cipherText) < aes.BlockSize {
 		err = errors.New("cipher text too short")
-		os.Exit(1)
+
 	}
 
 	//Get the iv from the cipher text
@@ -113,7 +108,6 @@ func Decryption(cipherText string, encryptionKey []byte, hmacKey []byte, hashTyp
 	//TODO: Unpad the cipher text
 	if len(plainText)%aes.BlockSize != 0 {
 		err = errors.New("decrypt text is not a multiple of block")
-		os.Exit(1)
 	}
 
 	//Get the cbc decryption mode
