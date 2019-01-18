@@ -2,9 +2,6 @@ package main
 
 import (
 	"CSS577/functions"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/hmac"
 	"crypto/sha256"
 	"fmt"
 )
@@ -15,59 +12,32 @@ var HASHALGORITHM = sha256.New
 const KEYLENGTH = 32
 
 func main() {
-	//fmt.Print("hello world")
 	_, encryptionKey, hmacKey := helper.Pbkdf([]byte("hey"), []byte("yeh"), 1000000, KEYLENGTH, HASHALGORITHM)
 
-	//fmt.Printf("%x\n%x\n%x\n", masterKey, encryptionKey, hmacKey)
+	text := []byte("exampleplaintext")
 
-	plainText := "exampleplaintext"
+	cipherText, hmacSum, err := helper.Encryption(text, encryptionKey, hmacKey, HASHALGORITHM)
 
-	cipherText, hmacSum := helper.Encryption(plainText, encryptionKey, hmacKey, HASHALGORITHM)
-
-	//Create a hmac block
-	decryptHmacBlock := hmac.New(HASHALGORITHM, hmacKey)
-	//Write the ciphertext to the block
-	decryptHmacBlock.Write(cipherText)
-	//Get the actual hmac hash
-	decryptHmacExpcted := decryptHmacBlock.Sum(nil)
-
-	//Check whether the received hmac and the calclated hmac are the same
-	eq := hmac.Equal(hmacSum, decryptHmacExpcted)
-
-	//If hmac is not the same panic and get out
-	if !eq {
-		panic("Houston, someone tampered with the message")
-	}
-
-	//Create a block for cipher text
-	decryptBlock, err := aes.NewCipher(encryptionKey)
 	if err != nil {
 		panic(err)
 	}
 
-	//Check if cipher text is less than the block size
-	if len(cipherText) < aes.BlockSize {
-		panic("Ciphertext too short")
+	fmt.Printf("cipher: %x\n"+
+		"encryption: %x\n"+
+		"hmac: %x\n"+
+		"sum: %x\n",
+		cipherText, encryptionKey, hmacKey, hmacSum)
+
+	plainText, equal, err := helper.Decryption(
+		"dd22148d908d84e069a647ed9a231155cc33b5ea38d255203fc911c69d992958",
+		encryptionKey,
+		hmacKey,
+		HASHALGORITHM,
+		"7f95fc765db4ade42f744dd1fd0c6d34d7952845d9d5f9042f62fda304c6bbd1")
+
+	if err != nil {
+		panic(err)
 	}
-
-	//Get the iv from the cipher text
-	decryptIV := cipherText[:aes.BlockSize]
-
-	//Get the actual cipher text
-	decryptText := cipherText[aes.BlockSize:]
-
-	//Check if the cipher text is a multiple of the block size
-	if len(decryptText)%aes.BlockSize != 0 {
-		panic("Decrypt text not a multiple")
-	}
-
-	//Get the cbc decryption mode
-	decryptMode := cipher.NewCBCDecrypter(decryptBlock, decryptIV)
-	//Decrypt the cipher text
-	decryptMode.CryptBlocks(decryptText, decryptText)
-
-	fmt.Printf("Decrypted Text:%s\n", decryptText)
-
-	fmt.Printf("HMAC equal: %t\n", eq)
+	fmt.Printf("Plain Text: %s\n HMAC eqaul: %t\n", plainText, equal)
 
 }
