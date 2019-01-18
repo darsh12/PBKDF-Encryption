@@ -3,6 +3,7 @@ package main
 import (
 	"CSS577/functions"
 	"crypto/sha512"
+	"fmt"
 )
 
 var HASHALGORITHM = sha512.New
@@ -21,17 +22,25 @@ func main() {
 		panic(err)
 	}
 
-	//fmt.Printf("cipher: %x\n"+
-	//	"encryption: %x\n"+
-	//	"hmac: %x\n"+
-	//	"sum: %x\n",
-	//	cipherText, encryptionKey, hmacKey, hmacSum)
+	fmt.Printf("cipher: %x\n"+
+		"encryption: %x\n"+
+		"hmac: %x\n"+
+		"sum: %x\n",
+		cipherText, encryptionKey, hmacKey, hmacSum)
+	//
+	//err = helper.WriteToFile("test.aes", cipherText, hmacSum, []byte("sha512"), []byte("aes128"))
+	//
+	//if err != nil {
+	//	panic(err)
+	//}
 
-	err = helper.WriteToFile("test.aes", cipherText, hmacSum, []byte("sha512"), []byte("aes128"))
+	cipherText, hmacSum, hashAlgorithm, algorithm, err := helper.ReadFromFile("test.aes")
 
 	if err != nil {
 		panic(err)
 	}
+
+	fmt.Printf("%x\n %s\n %s\n %s\n ", cipherText, hmacSum, hashAlgorithm, algorithm)
 
 	//plainText, equal, err := helper.Decryption(
 	//	"dd22148d908d84e069a647ed9a231155cc33b5ea38d255203fc911c69d992958",
