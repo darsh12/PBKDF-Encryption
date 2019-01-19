@@ -2,8 +2,10 @@ package main
 
 import (
 	"CSS577/functions"
+	"bufio"
 	"crypto/sha512"
 	"fmt"
+	"os"
 )
 
 var HASHALGORITHM = sha512.New
@@ -12,45 +14,52 @@ var HASHALGORITHM = sha512.New
 const KEYLENGTH = 16
 
 func main() {
-	_, encryptionKey, hmacKey := helper.Pbkdf([]byte("password"), []byte("salt"), 1, KEYLENGTH, HASHALGORITHM)
 
-	text := []byte("1111111111111111")
+	//Create a reader object
+	reader := bufio.NewReader(os.Stdin)
 
-	cipherText, hmacSum, err := helper.Encryption(text, encryptionKey, hmacKey, HASHALGORITHM)
+	fmt.Print("Enter your password: ")
 
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Printf("cipher: %x\n"+
-		"encryption: %x\n"+
-		"hmac: %x\n"+
-		"sum: %x\n",
-		cipherText, encryptionKey, hmacKey, hmacSum)
-	//
-	//err = helper.WriteToFile("test.aes", cipherText, hmacSum, []byte("sha512"), []byte("aes128"))
-	//
-	//if err != nil {
-	//	panic(err)
-	//}
-
-	cipherText, hmacSum, hashAlgorithm, algorithm, err := helper.ReadFromFile("test.aes")
+	//Get the password from the user
+	password, err := reader.ReadString('\n')
 
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Printf("%x\n %s\n %s\n %s\n ", cipherText, hmacSum, hashAlgorithm, algorithm)
+	//Get user text encrypt
+	fmt.Print("Input your string: ")
+	inputText, err := reader.ReadString('\n')
+	if err != nil {
+		panic(err)
+	}
 
-	//plainText, equal, err := helper.Decryption(
-	//	"dd22148d908d84e069a647ed9a231155cc33b5ea38d255203fc911c69d992958",
-	//	encryptionKey,
-	//	hmacKey,
-	//	HASHALGORITHM,
-	//	"7f95fc765db4ade42f744dd1fd0c6d34d7952845d9d5f9042f62fda304c6bbd1")
-	//
-	//if err != nil {
-	//	panic(err)
-	//}
-	//fmt.Printf("Plain Text: %s\n HMAC eqaul: %t\n", plainText, equal)
+	//Calculate the keys based on the password
+	_, encryptionKey, hmacKey := helper.Pbkdf([]byte(password), []byte("salt"), 5, KEYLENGTH, HASHALGORITHM)
+
+	//Encrpyt the text
+	cipherText, hmacSum, err := helper.Encryption([]byte(inputText), encryptionKey, hmacKey, HASHALGORITHM)
+
+	if err != nil {
+		panic(err)
+	}
+
+	//Write the encrypted text to the file
+	err = helper.WriteToFile("test.aes", cipherText, hmacSum, []byte("sha512"), []byte("aes128"))
+
+	if err != nil {
+		panic(err)
+	}
+
+	//Read cipher text from the file
+	cipherTextDec, hmacSumDec, _, _, err := helper.ReadFromFile("test.aes")
+
+	if err != nil {
+		panic(err)
+	}
+
+	//Decrypt the cipher text
+	plainTextDecrypted, hmacDecrypted, err := helper.Decryption(cipherTextDec, encryptionKey, hmacKey, HASHALGORITHM, hmacSumDec)
+	fmt.Printf("%s%t", plainTextDecrypted, hmacDecrypted)
+
 }

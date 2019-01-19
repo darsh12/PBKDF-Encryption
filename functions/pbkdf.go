@@ -1,11 +1,11 @@
 package helper
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/hmac"
 	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"golang.org/x/crypto/pbkdf2"
 	"hash"
@@ -23,11 +23,8 @@ func Pbkdf(password []byte, salt []byte, iter int, keyLen int, hashType func() h
 
 func Encryption(plainText []byte, encryptionKey []byte, hmacKey []byte, hashType func() hash.Hash) (cipherText []byte, hmacSum []byte, err error) {
 
-	//Assume the plainText is a multiple if a block size
-	//TODO: Pad the plaintext
-	if len(plainText)%aes.BlockSize != 0 {
-		panic("Not a multiple")
-	}
+	// Pad the plaintext
+	paddedText := Pad(plainText)
 
 	//Create a new block
 	block, err := aes.NewCipher(encryptionKey)
@@ -38,7 +35,7 @@ func Encryption(plainText []byte, encryptionKey []byte, hmacKey []byte, hashType
 
 	//Create a random iv and attach it at the start of the cipherText
 
-	cipherText = make([]byte, aes.BlockSize+len(plainText))
+	cipherText = make([]byte, aes.BlockSize+len(paddedText))
 
 	//Create a byte array of the block size
 	iv := cipherText[:aes.BlockSize]
@@ -49,7 +46,7 @@ func Encryption(plainText []byte, encryptionKey []byte, hmacKey []byte, hashType
 	}
 	//Use the cbc mode, and start appending the encrypted text at the end of cipherText
 	mode := cipher.NewCBCEncrypter(block, iv)
-	mode.CryptBlocks(cipherText[aes.BlockSize:], plainText)
+	mode.CryptBlocks(cipherText[aes.BlockSize:], paddedText)
 
 	//Create a new hmac block
 	hmacBlock := hmac.New(hashType, hmacKey)
@@ -63,22 +60,19 @@ func Encryption(plainText []byte, encryptionKey []byte, hmacKey []byte, hashType
 
 }
 
-func Decryption(cipherText string, encryptionKey []byte, hmacKey []byte, hashType func() hash.Hash, hmacSum string) (plainText []byte, hmacEqual bool, err error) {
+func Decryption(cipherText []byte, encryptionKey []byte, hmacKey []byte, hashType func() hash.Hash, hmacSum []byte) (plainText []byte, hmacEqual bool, err error) {
 
-	//Decode the cipher text and hmacSum
-	decodeCipherText, _ := hex.DecodeString(cipherText)
-	decodeHmacSum, _ := hex.DecodeString(hmacSum)
 	//Create a new hmac block
 	hmacBlock := hmac.New(hashType, hmacKey)
 
 	//Write to hmac block
-	hmacBlock.Write(decodeCipherText)
+	hmacBlock.Write(cipherText)
 
 	//Get the hash
 	hmacCalculated := hmacBlock.Sum(nil)
 
 	//Check if the hmac's are equal
-	hmacEqual = hmac.Equal(hmacCalculated, decodeHmacSum)
+	hmacEqual = hmac.Equal(hmacCalculated, hmacSum)
 
 	//If the hmac are not equal throw an error
 	if !hmacEqual {
@@ -99,16 +93,10 @@ func Decryption(cipherText string, encryptionKey []byte, hmacKey []byte, hashTyp
 	}
 
 	//Get the iv from the cipher text
-	iv := decodeCipherText[:aes.BlockSize]
+	iv := cipherText[:aes.BlockSize]
 
 	//Get the actual cipher text
-	plainText = decodeCipherText[aes.BlockSize:]
-
-	//Check if the cipher text is a multiple of the block size
-	//TODO: Unpad the cipher text
-	if len(plainText)%aes.BlockSize != 0 {
-		err = errors.New("decrypt text is not a multiple of block")
-	}
+	plainText = cipherText[aes.BlockSize:]
 
 	//Get the cbc decryption mode
 	mode := cipher.NewCBCDecrypter(block, iv)
@@ -116,5 +104,29 @@ func Decryption(cipherText string, encryptionKey []byte, hmacKey []byte, hashTyp
 	//Decrypt the cipher text
 	mode.CryptBlocks(plainText, plainText)
 
-	return plainText, hmacEqual, err
+	//Unpad the plain text
+	unpadText, err := Unpad(plainText)
+	if err != nil {
+		err = errors.New("unable to unpad plain text")
+	}
+
+	return unpadText, hmacEqual, err
+}
+
+//Code snippet from https://gist.github.com/stupidbodo/601b68bfef3449d1b8d9
+func Pad(src []byte) []byte {
+	padding := aes.BlockSize - len(src)%aes.BlockSize
+	padtext := bytes.Repeat([]byte{byte(padding)}, padding)
+	return append(src, padtext...)
+}
+
+func Unpad(src []byte) ([]byte, error) {
+	length := len(src)
+	unpadding := int(src[length-1])
+
+	if unpadding > length {
+		return nil, errors.New("unpad error. This could happen when incorrect encryption key is used")
+	}
+
+	return src[:(length - unpadding)], nil
 }
