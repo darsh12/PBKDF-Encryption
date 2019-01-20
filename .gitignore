@@ -1,3 +1,4 @@
 .idea/
 openfile.go
 encrypted.aes
+vendor/
