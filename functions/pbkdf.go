@@ -30,7 +30,7 @@ type PbkdfKeys struct {
 //Struct to store parameters that help in encryption and decryption
 type Parameters struct {
 	encryptionBlock     cipher.Block
-	encryptionBlockSize int
+	encryptionKeyLength int
 	hashAlgorithm       func() hash.Hash
 }
 
@@ -69,7 +69,7 @@ func Encryption(password string, plainText string, cli Parameters, meta Metadata
 	}
 
 	//Generate the keys from the password
-	key = Pbkdf([]byte(password), salt, 5000000, cli.encryptionBlockSize, cli.hashAlgorithm)
+	key = Pbkdf([]byte(password), salt, 5000000, cli.encryptionKeyLength, cli.hashAlgorithm)
 
 	// Pad the plaintext
 	paddedText := Pad([]byte(plainText), string(meta.algorithm))
@@ -77,12 +77,12 @@ func Encryption(password string, plainText string, cli Parameters, meta Metadata
 	// assign appropriate block and blocksize depending on the encryption type
 	if (string(meta.algorithm) == "aes128") || (string(meta.algorithm) == "aes256") {
 		cli.encryptionBlock, err = aes.NewCipher(key.encryptionKey)
-		cli.encryptionBlockSize = aes.BlockSize
+		cli.encryptionKeyLength = aes.BlockSize
 		CheckError(err)
 
 	} else if string(meta.algorithm) == "3des" {
 		cli.encryptionBlock, err = des.NewTripleDESCipher(key.encryptionKey)
-		cli.encryptionBlockSize = des.BlockSize
+		cli.encryptionKeyLength = des.BlockSize
 		CheckError(err)
 	} else {
 		err = errors.New("invalid encryption choice")
@@ -90,11 +90,11 @@ func Encryption(password string, plainText string, cli Parameters, meta Metadata
 	}
 
 	//Create a byte array of the length of the block size + length of the text
-	cipherText := make([]byte, cli.encryptionBlockSize+len(paddedText))
+	cipherText := make([]byte, cli.encryptionKeyLength+len(paddedText))
 
 	//Create a random iv and attach it at the start of the cipherText
 	//Create a byte array of the block size
-	iv := cipherText[:cli.encryptionBlockSize]
+	iv := cipherText[:cli.encryptionKeyLength]
 
 	//Use the readfull func to copy exact bytes to the buffer
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
@@ -102,7 +102,7 @@ func Encryption(password string, plainText string, cli Parameters, meta Metadata
 	}
 	//Use the cbc mode, and start appending the encrypted text at the end of cipherText
 	mode := cipher.NewCBCEncrypter(cli.encryptionBlock, iv)
-	mode.CryptBlocks(cipherText[cli.encryptionBlockSize:], paddedText)
+	mode.CryptBlocks(cipherText[cli.encryptionKeyLength:], paddedText)
 
 	//Create a new hmac block
 	hmacBlock := hmac.New(cli.hashAlgorithm, key.hmacKey)
@@ -186,28 +186,28 @@ func Decryption(file string, password string) (text string, err error) {
 
 	// assign appropriate key length depending on encryption algorithm
 	if string(blockType) == "aes128" {
-		par.encryptionBlockSize = 16
+		par.encryptionKeyLength = 16
 	} else if string(blockType) == "aes256" {
-		par.encryptionBlockSize = 32
+		par.encryptionKeyLength = 32
 	} else if string(blockType) == "3des" {
-		par.encryptionBlockSize = 24
+		par.encryptionKeyLength = 24
 	} else {
 		err = errors.New("invalid hash algorithm")
 		CheckError(err)
 	}
 
 	//Generate the keys from the password
-	key = Pbkdf([]byte(password), salt, 5000000, par.encryptionBlockSize, par.hashAlgorithm)
+	key = Pbkdf([]byte(password), salt, 5000000, par.encryptionKeyLength, par.hashAlgorithm)
 
 	// assign appropriate block and blocksize depending on the encryption type
 	if (string(blockType) == "aes128") || string(blockType) == "aes256" {
 		par.encryptionBlock, err = aes.NewCipher(key.encryptionKey)
-		par.encryptionBlockSize = aes.BlockSize
+		par.encryptionKeyLength = aes.BlockSize
 		CheckError(err)
 
 	} else if string(blockType) == "3des" {
 		par.encryptionBlock, err = des.NewTripleDESCipher(key.encryptionKey)
-		par.encryptionBlockSize = des.BlockSize
+		par.encryptionKeyLength = des.BlockSize
 		CheckError(err)
 	} else {
 		err = errors.New("invalid encryption choice")
@@ -233,15 +233,15 @@ func Decryption(file string, password string) (text string, err error) {
 	}
 
 	//Check if the cipher text is less than the block size
-	if len(cipherText) < par.encryptionBlockSize {
+	if len(cipherText) < par.encryptionKeyLength {
 		CheckError(err)
 	}
 
 	//Get the iv from the cipher text
-	iv := cipherText[:par.encryptionBlockSize]
+	iv := cipherText[:par.encryptionKeyLength]
 
 	//Get the actual cipher text
-	plainText := cipherText[par.encryptionBlockSize:]
+	plainText := cipherText[par.encryptionKeyLength:]
 
 	//Get the cbc decryption mode
 	mode := cipher.NewCBCDecrypter(par.encryptionBlock, iv)

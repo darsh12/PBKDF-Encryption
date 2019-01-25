@@ -42,7 +42,7 @@ func main() {
 
 		helper.CheckEmptyString(password)
 
-		//
+		//Use the struct to store the values from the Ui function and pass them to the encryption function
 		enc, meta = helper.Ui()
 		err := helper.Encryption(password, inputText, enc, meta)
 		helper.CheckError(err)
