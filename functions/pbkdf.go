@@ -44,8 +44,8 @@ type Metadata struct {
 func Pbkdf(password []byte, salt []byte, iter int, keyLen int, hashType func() hash.Hash) (key PbkdfKeys) {
 
 	key.masterKey = pbkdf2.Key(password, salt, iter, keyLen, hashType)
-	key.encryptionKey = pbkdf2.Key(key.masterKey, []byte("Salt1"), 1, keyLen, hashType)
-	key.hmacKey = pbkdf2.Key(key.masterKey, []byte("Salt2"), 1, keyLen, hashType)
+	key.encryptionKey = pbkdf2.Key(key.masterKey, []byte("This is a long salt for the encryption key"), 1, keyLen, hashType)
+	key.hmacKey = pbkdf2.Key(key.masterKey, []byte("This is the salt for the hmac key"), 1, keyLen, hashType)
 
 	return key
 }
@@ -69,7 +69,7 @@ func Encryption(password string, plainText string, cli Parameters, meta Metadata
 	}
 
 	//Generate the keys from the password
-	key = Pbkdf([]byte(password), salt, 5, cli.encryptionKeyLength, cli.hashAlgorithm)
+	key = Pbkdf([]byte(password), salt, 5000000, cli.encryptionKeyLength, cli.hashAlgorithm)
 
 	// Pad the plaintext
 	paddedText := Pad([]byte(plainText), string(meta.algorithm))
@@ -200,7 +200,7 @@ func Decryption(file string, password string) (text string, err error) {
 	}
 
 	//Generate the keys from the password
-	key = Pbkdf([]byte(password), salt, 5, par.encryptionKeyLength, par.hashAlgorithm)
+	key = Pbkdf([]byte(password), salt, 5000000, par.encryptionKeyLength, par.hashAlgorithm)
 
 	// assign appropriate block and blocksize depending on the encryption type
 	if (encryptionAlgorithm == "aes128") || encryptionAlgorithm == "aes256" {
