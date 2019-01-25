@@ -18,7 +18,7 @@ func Ui() (encryption Parameters, meta Metadata) {
 	var encryptionType, hashType string
 
 	fmt.Println("Choose Encryption Algorithm: ")
-	fmt.Println("1: AES128, 2: AES256, 3: 3DES")
+	fmt.Print("1: AES128, 2: AES256, 3: 3DES: ")
 
 	//Read encryption algorithm
 	in.Scan()
@@ -42,7 +42,7 @@ func Ui() (encryption Parameters, meta Metadata) {
 	}
 
 	fmt.Println("Choose Hash Algorithm: ")
-	fmt.Println("1: SHA256, 2: SHA512")
+	fmt.Print("1: SHA256, 2: SHA512: ")
 
 	//Read hash algorithm
 	in.Scan()

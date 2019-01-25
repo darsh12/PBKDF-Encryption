@@ -13,7 +13,7 @@ func main() {
 
 	in := bufio.NewScanner(os.Stdin)
 
-	fmt.Println("1: Encryption, 2: Decryption")
+	fmt.Print("1: Encryption, 2: Decryption: ")
 	//Read executionType input
 	in.Scan()
 	executionType = in.Text()
@@ -67,7 +67,7 @@ func main() {
 
 		plainText, err := helper.Decryption(file, password)
 		helper.CheckError(err)
-		fmt.Printf("%s", plainText)
+		fmt.Printf("The decrypted text is: \n%s\n", plainText)
 
 		break
 	default:

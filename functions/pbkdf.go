@@ -137,7 +137,7 @@ func Encryption(password string, plainText string, cli Parameters, meta Metadata
 	err = xattr.FSet(f, "SALT", salt)
 	CheckError(err)
 
-	fmt.Print("Cipher text written to encrypted.aes")
+	fmt.Println("Cipher text written to encrypted.aes")
 	return err
 
 }
