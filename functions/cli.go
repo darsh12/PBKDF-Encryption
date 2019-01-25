@@ -5,9 +5,7 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"fmt"
-	"log"
 	"os"
-	"strings"
 )
 
 //Function to create a user option interface for encryption purposes
@@ -64,11 +62,4 @@ func Ui() (encryption Parameters, meta Metadata) {
 	}
 
 	return encryption, meta
-}
-
-func CheckEmptyString(str string) {
-	if strings.TrimSpace(str) == "" {
-		log.Fatal("empty input")
-		os.Exit(1)
-	}
 }

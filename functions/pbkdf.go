@@ -2,7 +2,6 @@ package helper
 
 import (
 	"bufio"
-	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/des"
@@ -10,12 +9,10 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/sha512"
-	"encoding/base64"
 	"errors"
 	"golang.org/x/crypto/pbkdf2"
 	"hash"
 	"io"
-	"log"
 	"os"
 	"strings"
 )
@@ -128,16 +125,6 @@ func Encryption(password string, plainText string, cli Parameters, meta Metadata
 	//fmt.Println("Cipher text written to encrypted.aes")
 	return err
 
-}
-
-func encodeBase64(input []byte) string {
-	return base64.StdEncoding.EncodeToString(input)
-}
-
-func DecodeBase64(input string) []byte {
-	str, err := base64.StdEncoding.DecodeString(input)
-	CheckError(err)
-	return str
 }
 
 /*
@@ -257,41 +244,4 @@ func Decryption(file string, password string) (text string, err error) {
 	CheckError(err)
 
 	return string(unpadText), err
-}
-
-//Function to check errors, to prevent a lot if statements in-code
-func CheckError(err error) {
-	if err != nil {
-		log.Fatal(err)
-		//panic(err)
-	}
-}
-
-//Function to pad the data and figure out the block size by repeating the bytes
-func Pad(src []byte, algorithm string) []byte {
-	var padding int
-
-	if (algorithm == "aes128") || algorithm == "aes256" {
-		padding = aes.BlockSize - len(src)%aes.BlockSize
-	} else if algorithm == "3des" {
-		padding = des.BlockSize - len(src)%des.BlockSize
-	} else {
-		err := errors.New("invalid encryption choice")
-		CheckError(err)
-	}
-
-	padtext := bytes.Repeat([]byte{byte(padding)}, padding)
-	return append(src, padtext...)
-}
-
-//Function to unpad the data
-func Unpad(src []byte) ([]byte, error) {
-	length := len(src)
-	unpadding := int(src[length-1])
-
-	if unpadding > length {
-		return nil, errors.New("un-padding error. ")
-	}
-
-	return src[:(length - unpadding)], nil
 }
