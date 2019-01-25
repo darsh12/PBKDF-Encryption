@@ -2,7 +2,7 @@
 Implement a secure way to encrypt a string using a HMAC with either a SHA256 or SHA512 hash. Use  3DES, AES128 and AES256 algorithms in CBC mode.
 
  ### Operating Systems
- The program will on run in **linux** based distribution, because of how the program writes its metadata.
+ The program will on run **linux** based distribution, because of how the program writes its metadata, therefore windows is **not supported**
  
 ### Tech
 * Go binary >= 1.11
