@@ -24,6 +24,10 @@ func main() {
 	case "1":
 		var password, inputText string
 
+		//Initialise structs
+		var enc helper.Parameters
+		var meta helper.Metadata
+
 		fmt.Println("Enter Text:")
 		//Read user input
 		in.Scan()
@@ -38,8 +42,9 @@ func main() {
 
 		helper.CheckEmptyString(password)
 
-		block, hash, key := helper.Ui()
-		err := helper.Encryption(password, inputText, hash, block, key)
+		//
+		enc, meta = helper.Ui()
+		err := helper.Encryption(password, inputText, enc, meta)
 		helper.CheckError(err)
 
 		break

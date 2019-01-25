@@ -2,6 +2,8 @@ package helper
 
 import (
 	"bufio"
+	"crypto/sha256"
+	"crypto/sha512"
 	"fmt"
 	"log"
 	"os"
@@ -9,12 +11,11 @@ import (
 )
 
 //Function to create a user option interface for encryption purposes
-func Ui() (b string, h string, k int) {
+func Ui() (encryption Parameters, meta Metadata) {
 
 	in := bufio.NewScanner(os.Stdin)
 
-	var encryptionType, blockType, hashType string
-	var keyLength int
+	var encryptionType, hashType string
 
 	fmt.Println("Choose Encryption Algorithm: ")
 	fmt.Println("1: AES128, 2: AES256, 3: 3DES")
@@ -25,16 +26,16 @@ func Ui() (b string, h string, k int) {
 
 	switch encryptionType {
 	case "1":
-		keyLength = 16
-		blockType = "aes128"
+		encryption.encrpytionBlockSize = 16
+		meta.algorithm = []byte("aes128")
 		break
 	case "2":
-		keyLength = 32
-		blockType = "aes256"
+		encryption.encrpytionBlockSize = 32
+		meta.algorithm = []byte("aes256")
 		break
 	case "3":
-		keyLength = 24
-		blockType = "3des"
+		encryption.encrpytionBlockSize = 24
+		meta.algorithm = []byte("3des")
 	default:
 		fmt.Println("Invalid choice")
 		os.Exit(1)
@@ -49,10 +50,12 @@ func Ui() (b string, h string, k int) {
 
 	switch hashType {
 	case "1":
-		hashType = "sha256"
+		meta.hash = []byte("sha256")
+		encryption.hashAlgorithm = sha256.New
 		break
 	case "2":
-		hashType = "sha512"
+		meta.hash = []byte("sha512")
+		encryption.hashAlgorithm = sha512.New
 		break
 	default:
 		fmt.Println("Invalid choice")
@@ -60,7 +63,7 @@ func Ui() (b string, h string, k int) {
 
 	}
 
-	return blockType, hashType, keyLength
+	return encryption, meta
 }
 
 func CheckEmptyString(str string) {

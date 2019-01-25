@@ -10,81 +10,102 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"errors"
+	"fmt"
 	"github.com/pkg/xattr"
 	"golang.org/x/crypto/pbkdf2"
 	"hash"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 )
 
-func Pbkdf(password []byte, salt []byte, iter int, keyLen int, hashType func() hash.Hash) (masterKey []byte, encryptionKey []byte, hmacKey []byte) {
-
-	masterKey = pbkdf2.Key(password, salt, iter, keyLen, hashType)
-	encryptionKey = pbkdf2.Key(masterKey, []byte("Salt1"), 1, keyLen, hashType)
-	hmacKey = pbkdf2.Key(masterKey, []byte("Salt2"), 1, keyLen, hashType)
-
-	return masterKey, encryptionKey, hmacKey
+//Struct to store the different types of keys
+type PbkdfKeys struct {
+	masterKey     []byte
+	encryptionKey []byte
+	hmacKey       []byte
 }
 
-func Encryption(password string, plainText string, hashAlgorithm string, blockType string, keyLength int) (err error) {
+//Struct to store parameters that help in encryption and decryption
+type Parameters struct {
+	encrpytionBlock     cipher.Block
+	encrpytionBlockSize int
+	hashAlgorithm       func() hash.Hash
+}
 
-	//Initialise variables
-	var block cipher.Block
-	var blockSize int
+//Struct to store values to be written in metadata during the encryption process
+type Metadata struct {
+	hash      []byte
+	algorithm []byte
+}
+
+//This function will create three keys, store the keys in the PbkdfKeys struct and return the struct
+func Pbkdf(password []byte, salt []byte, iter int, keyLen int, hashType func() hash.Hash) (key PbkdfKeys) {
+
+	key.masterKey = pbkdf2.Key(password, salt, iter, keyLen, hashType)
+	key.encryptionKey = pbkdf2.Key(key.masterKey, []byte("Salt1"), 1, keyLen, hashType)
+	key.hmacKey = pbkdf2.Key(key.masterKey, []byte("Salt2"), 1, keyLen, hashType)
+
+	return key
+}
+
+/*
+This function will take in a password, plain text, the type of encryption and hash algorithm that will be used, from the user.
+It will then encrypt and the cipher text along with the metadata.
+It will return an error if there are any.
+*/
+func Encryption(password string, plainText string, cli Parameters, meta Metadata) (err error) {
+
+	//Initialise variable
 	salt := make([]byte, 32)
+
+	//Initialise struct
+	var key PbkdfKeys
 
 	//Generate a random salt value
 	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
 		CheckError(err)
 	}
 
-	//Default to sha256
-	hashType := sha256.New
-
-	//If specified used sha512
-	if hashAlgorithm == "sha512" {
-		hashType = sha512.New
-	}
-
 	//Generate the keys from the password
-	_, encryptionKey, hmacKey := Pbkdf([]byte(password), salt, 5000000, keyLength, hashType)
+	key = Pbkdf([]byte(password), salt, 5000000, cli.encrpytionBlockSize, cli.hashAlgorithm)
 
 	// Pad the plaintext
-	paddedText := Pad([]byte(plainText))
+	paddedText := Pad([]byte(plainText), string(meta.algorithm))
 
 	// assign appropriate block and blocksize depending on the encryption type
-	if (blockType == "aes128") || blockType == "aes256" {
-		block, err = aes.NewCipher(encryptionKey)
-		blockSize = aes.BlockSize
+	if (string(meta.algorithm) == "aes128") || (string(meta.algorithm) == "aes256") {
+		cli.encrpytionBlock, err = aes.NewCipher(key.encryptionKey)
+		cli.encrpytionBlockSize = aes.BlockSize
 		CheckError(err)
 
-	} else if blockType == "3des" {
-		block, err = des.NewTripleDESCipher(encryptionKey)
-		blockSize = des.BlockSize
+	} else if string(meta.algorithm) == "3des" {
+		cli.encrpytionBlock, err = des.NewTripleDESCipher(key.encryptionKey)
+		cli.encrpytionBlockSize = des.BlockSize
 		CheckError(err)
 	} else {
 		err = errors.New("invalid encryption choice")
 		CheckError(err)
 	}
 
+	//Create a byte array of the length of the block size + length of the text
+	cipherText := make([]byte, cli.encrpytionBlockSize+len(paddedText))
+
 	//Create a random iv and attach it at the start of the cipherText
-
-	cipherText := make([]byte, blockSize+len(paddedText))
-
 	//Create a byte array of the block size
-	iv := cipherText[:blockSize]
+	iv := cipherText[:cli.encrpytionBlockSize]
 
 	//Use the readfull func to copy exact bytes to the buffer
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
 		CheckError(err)
 	}
 	//Use the cbc mode, and start appending the encrypted text at the end of cipherText
-	mode := cipher.NewCBCEncrypter(block, iv)
-	mode.CryptBlocks(cipherText[blockSize:], paddedText)
+	mode := cipher.NewCBCEncrypter(cli.encrpytionBlock, iv)
+	mode.CryptBlocks(cipherText[cli.encrpytionBlockSize:], paddedText)
 
 	//Create a new hmac block
-	hmacBlock := hmac.New(hashType, hmacKey)
+	hmacBlock := hmac.New(cli.hashAlgorithm, key.hmacKey)
 	//Write data to the block
 	hmacBlock.Write(cipherText)
 
@@ -97,41 +118,47 @@ func Encryption(password string, plainText string, hashAlgorithm string, blockTy
 
 	//Create a new file
 	f, err := os.Create("encrypted.aes")
-
 	CheckError(err)
 
 	//Write cipher text to file. We dont care about the total bytes written
 	_, err = f.Write(cipherText)
-
 	CheckError(err)
 
 	//Write the xattr (metadata) to the file
 	err = xattr.FSet(f, "HMAC", hmacSum)
 	CheckError(err)
 
-	err = xattr.FSet(f, "HASH", []byte(hashAlgorithm))
+	err = xattr.FSet(f, "HASH", meta.hash)
 	CheckError(err)
 
-	err = xattr.FSet(f, "ALGORITHM", []byte(blockType))
+	err = xattr.FSet(f, "ALGORITHM", meta.algorithm)
 	CheckError(err)
 
 	err = xattr.FSet(f, "SALT", salt)
 	CheckError(err)
 
+	fmt.Print("Cipher text written to encrypted.aes")
 	return err
 
 }
 
-func Decryption(name string, password string) (text string, err error) {
+/*
+This function will take in the encrypted file path and the password from the user.
+The rest of the parameters required for decryptio, will be extracted from the metadata, written during the encryption process
+It will return the plaintext if successful, else return an error if something goes wrong.
+*/
+func Decryption(file string, password string) (text string, err error) {
 
-	var keyLength int
+	//Initialise structs
+	var par Parameters
+	var key PbkdfKeys
 
 	//Read the file contents
-	cipherText, err := ioutil.ReadFile(name)
+	cipherText, err := ioutil.ReadFile(file)
 	CheckError(err)
 
 	//Open the file to get the xattr
-	f, err := os.Open(name)
+	f, err := os.Open(file)
 	CheckError(err)
 
 	// Read the xattr from the file
@@ -147,40 +174,40 @@ func Decryption(name string, password string) (text string, err error) {
 	salt, err := xattr.FGet(f, "SALT")
 	CheckError(err)
 
-	//Default to sha256
-	hashType := sha256.New
-
-	//If specified used sha512
-	if string(hashAlgorithm) == "sha512" {
-		hashType = sha512.New
+	//Figure out which hash algorithm was used
+	if string(hashAlgorithm) == "sha256" {
+		par.hashAlgorithm = sha256.New
+	} else if string(hashAlgorithm) == "sha512" {
+		par.hashAlgorithm = sha512.New
+	} else {
+		err = errors.New("invalid hash algorithm")
+		CheckError(err)
 	}
 
-	// assign appropriate keylength depending on encryption algorithm
+	// assign appropriate key length depending on encryption algorithm
 	if string(blockType) == "aes128" {
-		keyLength = 16
+		par.encrpytionBlockSize = 16
 	} else if string(blockType) == "aes256" {
-		keyLength = 32
+		par.encrpytionBlockSize = 32
 	} else if string(blockType) == "3des" {
-		keyLength = 24
-
+		par.encrpytionBlockSize = 24
+	} else {
+		err = errors.New("invalid hash algorithm")
+		CheckError(err)
 	}
 
 	//Generate the keys from the password
-	_, encryptionKey, hmacKey := Pbkdf([]byte(password), salt, 5000000, keyLength, hashType)
-
-	//Initialise variables
-	var block cipher.Block
-	var blockSize int
+	key = Pbkdf([]byte(password), salt, 5000000, par.encrpytionBlockSize, par.hashAlgorithm)
 
 	// assign appropriate block and blocksize depending on the encryption type
 	if (string(blockType) == "aes128") || string(blockType) == "aes256" {
-		block, err = aes.NewCipher(encryptionKey)
-		blockSize = aes.BlockSize
+		par.encrpytionBlock, err = aes.NewCipher(key.encryptionKey)
+		par.encrpytionBlockSize = aes.BlockSize
 		CheckError(err)
 
 	} else if string(blockType) == "3des" {
-		block, err = des.NewTripleDESCipher(encryptionKey)
-		blockSize = des.BlockSize
+		par.encrpytionBlock, err = des.NewTripleDESCipher(key.encryptionKey)
+		par.encrpytionBlockSize = des.BlockSize
 		CheckError(err)
 	} else {
 		err = errors.New("invalid encryption choice")
@@ -188,7 +215,7 @@ func Decryption(name string, password string) (text string, err error) {
 	}
 
 	//Create a new hmac block
-	hmacBlock := hmac.New(hashType, hmacKey)
+	hmacBlock := hmac.New(par.hashAlgorithm, key.hmacKey)
 
 	//Write to hmac block
 	hmacBlock.Write(cipherText)
@@ -206,18 +233,18 @@ func Decryption(name string, password string) (text string, err error) {
 	}
 
 	//Check if the cipher text is less than the block size
-	if len(cipherText) < blockSize {
+	if len(cipherText) < par.encrpytionBlockSize {
 		CheckError(err)
 	}
 
 	//Get the iv from the cipher text
-	iv := cipherText[:blockSize]
+	iv := cipherText[:par.encrpytionBlockSize]
 
 	//Get the actual cipher text
-	plainText := cipherText[blockSize:]
+	plainText := cipherText[par.encrpytionBlockSize:]
 
 	//Get the cbc decryption mode
-	mode := cipher.NewCBCDecrypter(block, iv)
+	mode := cipher.NewCBCDecrypter(par.encrpytionBlock, iv)
 
 	//Decrypt the cipher text
 	mode.CryptBlocks(plainText, plainText)
@@ -229,27 +256,38 @@ func Decryption(name string, password string) (text string, err error) {
 	return string(unpadText), err
 }
 
-//Function to check errors
+//Function to check errors, to prevent a lot if statements in-code
 func CheckError(err error) {
 	if err != nil {
-		//log.Fatal(err)
-		panic(err)
+		log.Fatal(err)
+		//panic(err)
 	}
 }
 
-//Code snippet from https://gist.github.com/stupidbodo/601b68bfef3449d1b8d9
-func Pad(src []byte) []byte {
-	padding := aes.BlockSize - len(src)%aes.BlockSize
+//Function to pad the data and figure out the block size by repeating the bytes
+func Pad(src []byte, algorithm string) []byte {
+	var padding int
+
+	if (algorithm == "aes128") || algorithm == "aes256" {
+		padding = aes.BlockSize - len(src)%aes.BlockSize
+	} else if algorithm == "3des" {
+		padding = des.BlockSize - len(src)%des.BlockSize
+	} else {
+		err := errors.New("invalid encryption choice")
+		CheckError(err)
+	}
+
 	padtext := bytes.Repeat([]byte{byte(padding)}, padding)
 	return append(src, padtext...)
 }
 
+//Function to unpad the data
 func Unpad(src []byte) ([]byte, error) {
 	length := len(src)
 	unpadding := int(src[length-1])
 
 	if unpadding > length {
-		return nil, errors.New("unpad error. This could happen when incorrect encryption key is used")
+		return nil, errors.New("un-padding error. ")
 	}
 
 	return src[:(length - unpadding)], nil
