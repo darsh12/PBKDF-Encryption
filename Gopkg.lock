@@ -2,14 +2,6 @@
 
 
 [[projects]]
-  digest = "1:7d73792e037fadced4b09c9a28e1f24fafefa581b07260750c970c1e68f77dc2"
-  name = "github.com/pkg/xattr"
-  packages = ["."]
-  pruneopts = "UT"
-  revision = "503a7f60d699aeb59d42eefed0c64df14335b13f"
-  version = "v0.4.0"
-
-[[projects]]
   branch = "master"
   digest = "1:f92f6956e4059f6a3efc14924d2dd58ba90da25cc57fe07ae3779ef2f5e0c5f2"
   name = "golang.org/x/crypto"
@@ -17,20 +9,9 @@
   pruneopts = "UT"
   revision = "ff983b9c42bc9fbf91556e191cc8efb585c16908"
 
-[[projects]]
-  branch = "master"
-  digest = "1:f6f6d9d6f80c9e32acc0f4f3b904e0b9f5b18a7757c2ef941121bd79a10e7bdf"
-  name = "golang.org/x/sys"
-  packages = ["unix"]
-  pruneopts = "UT"
-  revision = "11f53e03133963fb11ae0588e08b5e0b85be8be5"
-
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  input-imports = [
-    "github.com/pkg/xattr",
-    "golang.org/x/crypto/pbkdf2",
-  ]
+  input-imports = ["golang.org/x/crypto/pbkdf2"]
   solver-name = "gps-cdcl"
   solver-version = 1

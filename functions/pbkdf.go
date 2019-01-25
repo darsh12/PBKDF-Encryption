@@ -1,6 +1,7 @@
 package helper
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
@@ -9,15 +10,14 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/sha512"
+	"encoding/base64"
 	"errors"
-	"fmt"
-	"github.com/pkg/xattr"
 	"golang.org/x/crypto/pbkdf2"
 	"hash"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
+	"strings"
 )
 
 //Struct to store the different types of keys
@@ -36,8 +36,8 @@ type Parameters struct {
 
 //Struct to store values to be written in metadata during the encryption process
 type Metadata struct {
-	hash      []byte
-	algorithm []byte
+	hash      string
+	algorithm string
 }
 
 //This function will create three keys, store the keys in the PbkdfKeys struct and return the struct
@@ -69,18 +69,18 @@ func Encryption(password string, plainText string, cli Parameters, meta Metadata
 	}
 
 	//Generate the keys from the password
-	key = Pbkdf([]byte(password), salt, 5000000, cli.encryptionKeyLength, cli.hashAlgorithm)
+	key = Pbkdf([]byte(password), salt, 5, cli.encryptionKeyLength, cli.hashAlgorithm)
 
 	// Pad the plaintext
 	paddedText := Pad([]byte(plainText), string(meta.algorithm))
 
 	// assign appropriate block and blocksize depending on the encryption type
-	if (string(meta.algorithm) == "aes128") || (string(meta.algorithm) == "aes256") {
+	if (meta.algorithm == "aes128") || (meta.algorithm == "aes256") {
 		cli.encryptionBlock, err = aes.NewCipher(key.encryptionKey)
 		cli.encryptionKeyLength = aes.BlockSize
 		CheckError(err)
 
-	} else if string(meta.algorithm) == "3des" {
+	} else if meta.algorithm == "3des" {
 		cli.encryptionBlock, err = des.NewTripleDESCipher(key.encryptionKey)
 		cli.encryptionKeyLength = des.BlockSize
 		CheckError(err)
@@ -112,6 +112,8 @@ func Encryption(password string, plainText string, cli Parameters, meta Metadata
 	//Get the actual hashAlgorithm of the cipherText
 	hmacSum := hmacBlock.Sum(nil)
 
+	finalString := encodeBase64(hmacSum) + ";" + meta.hash + ";" + meta.algorithm + ";" + encodeBase64(salt) + ";" + encodeBase64(cipherText)
+
 	/*
 		WRITE CIPHER TEXT AND ACCOMPANYING XATTR TO FILE
 	*/
@@ -120,26 +122,22 @@ func Encryption(password string, plainText string, cli Parameters, meta Metadata
 	f, err := os.Create("encrypted.aes")
 	CheckError(err)
 
-	//Write cipher text to file. We dont care about the total bytes written
-	_, err = f.Write(cipherText)
+	_, err = f.WriteString(finalString)
 	CheckError(err)
 
-	//Write the xattr (metadata) to the file
-	err = xattr.FSet(f, "HMAC", hmacSum)
-	CheckError(err)
-
-	err = xattr.FSet(f, "HASH", meta.hash)
-	CheckError(err)
-
-	err = xattr.FSet(f, "ALGORITHM", meta.algorithm)
-	CheckError(err)
-
-	err = xattr.FSet(f, "SALT", salt)
-	CheckError(err)
-
-	fmt.Println("Cipher text written to encrypted.aes")
+	//fmt.Println("Cipher text written to encrypted.aes")
 	return err
 
+}
+
+func encodeBase64(input []byte) string {
+	return base64.StdEncoding.EncodeToString(input)
+}
+
+func DecodeBase64(input string) []byte {
+	str, err := base64.StdEncoding.DecodeString(input)
+	CheckError(err)
+	return str
 }
 
 /*
@@ -153,31 +151,36 @@ func Decryption(file string, password string) (text string, err error) {
 	var par Parameters
 	var key PbkdfKeys
 
-	//Read the file contents
-	cipherText, err := ioutil.ReadFile(file)
-	CheckError(err)
-
-	//Open the file to get the xattr
+	//Open the file
 	f, err := os.Open(file)
 	CheckError(err)
 
-	// Read the xattr from the file
-	hmacSum, err := xattr.FGet(f, "HMAC")
-	CheckError(err)
+	//Create a new scanner using the file as the input
+	scan := bufio.NewScanner(f)
 
-	hashAlgorithm, err := xattr.FGet(f, "HASH")
-	CheckError(err)
+	//Scan the file for text and return the text
+	scan.Scan()
+	fileContents := scan.Text()
 
-	blockType, err := xattr.FGet(f, "ALGORITHM")
-	CheckError(err)
+	splitString := strings.Split(fileContents, ";")
 
-	salt, err := xattr.FGet(f, "SALT")
-	CheckError(err)
+	/*
+		DECODE FROM BASE64
+	*/
+	hmacSum := DecodeBase64(splitString[0])
+	salt := DecodeBase64(splitString[3])
+	cipherText := DecodeBase64(splitString[4])
+
+	/*
+		NO NEED TO DECODE
+	*/
+	hashAlgorithm := splitString[1]
+	encryptionAlgorithm := splitString[2]
 
 	//Figure out which hash algorithm was used
-	if string(hashAlgorithm) == "sha256" {
+	if hashAlgorithm == "sha256" {
 		par.hashAlgorithm = sha256.New
-	} else if string(hashAlgorithm) == "sha512" {
+	} else if hashAlgorithm == "sha512" {
 		par.hashAlgorithm = sha512.New
 	} else {
 		err = errors.New("invalid hash algorithm")
@@ -185,11 +188,11 @@ func Decryption(file string, password string) (text string, err error) {
 	}
 
 	// assign appropriate key length depending on encryption algorithm
-	if string(blockType) == "aes128" {
+	if encryptionAlgorithm == "aes128" {
 		par.encryptionKeyLength = 16
-	} else if string(blockType) == "aes256" {
+	} else if encryptionAlgorithm == "aes256" {
 		par.encryptionKeyLength = 32
-	} else if string(blockType) == "3des" {
+	} else if encryptionAlgorithm == "3des" {
 		par.encryptionKeyLength = 24
 	} else {
 		err = errors.New("invalid hash algorithm")
@@ -197,15 +200,15 @@ func Decryption(file string, password string) (text string, err error) {
 	}
 
 	//Generate the keys from the password
-	key = Pbkdf([]byte(password), salt, 5000000, par.encryptionKeyLength, par.hashAlgorithm)
+	key = Pbkdf([]byte(password), salt, 5, par.encryptionKeyLength, par.hashAlgorithm)
 
 	// assign appropriate block and blocksize depending on the encryption type
-	if (string(blockType) == "aes128") || string(blockType) == "aes256" {
+	if (encryptionAlgorithm == "aes128") || encryptionAlgorithm == "aes256" {
 		par.encryptionBlock, err = aes.NewCipher(key.encryptionKey)
 		par.encryptionKeyLength = aes.BlockSize
 		CheckError(err)
 
-	} else if string(blockType) == "3des" {
+	} else if encryptionAlgorithm == "3des" {
 		par.encryptionBlock, err = des.NewTripleDESCipher(key.encryptionKey)
 		par.encryptionKeyLength = des.BlockSize
 		CheckError(err)

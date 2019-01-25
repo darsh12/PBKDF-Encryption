@@ -27,15 +27,15 @@ func Ui() (encryption Parameters, meta Metadata) {
 	switch encryptionType {
 	case "1":
 		encryption.encryptionKeyLength = 16
-		meta.algorithm = []byte("aes128")
+		meta.algorithm = "aes128"
 		break
 	case "2":
 		encryption.encryptionKeyLength = 32
-		meta.algorithm = []byte("aes256")
+		meta.algorithm = "aes256"
 		break
 	case "3":
 		encryption.encryptionKeyLength = 24
-		meta.algorithm = []byte("3des")
+		meta.algorithm = "3des"
 	default:
 		fmt.Println("Invalid choice")
 		os.Exit(1)
@@ -50,11 +50,11 @@ func Ui() (encryption Parameters, meta Metadata) {
 
 	switch hashType {
 	case "1":
-		meta.hash = []byte("sha256")
+		meta.hash = "sha256"
 		encryption.hashAlgorithm = sha256.New
 		break
 	case "2":
-		meta.hash = []byte("sha512")
+		meta.hash = "sha512"
 		encryption.hashAlgorithm = sha512.New
 		break
 	default:
